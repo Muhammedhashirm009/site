@@ -25,6 +25,7 @@
       box-shadow: 0 4px 20px rgba(0,0,0,0.1);
       width: 100%;
       max-width: 400px;
+      position: relative;
     }
     h2 {
       margin-bottom: 20px;
@@ -66,9 +67,54 @@
     .on { color: green; }
     .off { color: red; }
     .hidden { display: none; }
+
+    /* Settings Menu */
+    .menu-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    .dropdown {
+      position: absolute;
+      top: 50px;
+      right: 20px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      display: none;
+      z-index: 10;
+    }
+
+    .dropdown button {
+      width: 100%;
+      padding: 10px 15px;
+      text-align: left;
+      border-radius: 0;
+      background: none;
+      color: #333;
+    }
+
+    .dropdown button:hover {
+      background: #eee;
+    }
+
+    #wifiSection, #adminSection {
+      margin-top: 20px;
+      border-top: 1px solid #ddd;
+      padding-top: 20px;
+    }
+
   </style>
 </head>
 <body>
+
+  <!-- Login Card -->
   <div id="loginCard" class="card">
     <h2>🔐 Login to Control Your Home</h2>
     <input type="email" id="email" placeholder="Email address" />
@@ -77,21 +123,36 @@
     <button class="secondary" onclick="signup()">Sign Up</button>
   </div>
 
+  <!-- Control Panel -->
   <div id="controlCard" class="card hidden">
+    <button class="menu-btn" onclick="toggleMenu()">⋮</button>
+    <div class="dropdown" id="dropdownMenu">
+      <button onclick="toggleSection('wifiSection')">Wi-Fi Settings</button>
+      <button id="adminOption" onclick="toggleSection('adminSection')">Manage Users</button>
+    </div>
+
     <h2>🏠 Home Control Panel</h2>
     <p>Lamp 1: <span id="lamp1-status" class="status">...</span></p>
     <button onclick="toggleLamp('lamp1')">Toggle Lamp 1</button>
     <p>Lamp 2: <span id="lamp2-status" class="status">...</span></p>
     <button onclick="toggleLamp('lamp2')">Toggle Lamp 2</button>
+    <button class="secondary" onclick="logout()" style="margin-top:20px;">Logout</button>
 
-    <div id="adminPanel" class="hidden">
-      <hr/>
-      <h3>Add Allowed User</h3>
-      <input type="email" id="newUserEmail" placeholder="New user's email" />
-      <button onclick="addAllowedUser()">Add User</button>
+    <!-- Wi-Fi Settings -->
+    <div id="wifiSection" class="hidden">
+      <h3>📶 Wi-Fi Settings</h3>
+      <button onclick="rescanWifi()">Rescan Wi-Fi</button>
+      <ul id="wifiList"></ul>
+      <input type="text" id="wifiPassword" placeholder="Wi-Fi Password">
+      <button onclick="connectToWiFi()">Connect</button>
     </div>
 
-    <button class="secondary" onclick="logout()" style="margin-top:20px;">Logout</button>
+    <!-- Admin Section -->
+    <div id="adminSection" class="hidden">
+      <h3>👤 Add Allowed User</h3>
+      <input type="email" id="newEmail" placeholder="New user email" />
+      <button onclick="addUser()">Add User</button>
+    </div>
   </div>
 
   <script>
@@ -102,33 +163,25 @@
       projectId: "h4xcontrol",
       storageBucket: "h4xcontrol.appspot.com",
       messagingSenderId: "1030967330576",
-      appId: "1:1030967330576:web:ac3e4201a61b5bebea8795",
-      measurementId: "G-Z20VN8LY3N"
+      appId: "1:1030967330576:web:ac3e4201a61b5bebea8795"
     };
 
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.database();
-
-    // Add default admin email if not already present
-    const defaultAdminEmail = "contact@hashir.site".replace(/\./g, ',');
-    db.ref("allowed_users/" + defaultAdminEmail).once('value').then(snap => {
-      if (!snap.exists()) {
-        db.ref("allowed_users/" + defaultAdminEmail).set(true);
-      }
-    });
+    let currentUser = null;
 
     auth.onAuthStateChanged(user => {
+      currentUser = user;
       if (user) {
         document.getElementById("loginCard").classList.add("hidden");
         document.getElementById("controlCard").classList.remove("hidden");
         updateStatus("lamp1");
         updateStatus("lamp2");
 
-        // Show admin panel only to admin
-        if (user.email === "contact@hashir.site") {
-          document.getElementById("adminPanel").classList.remove("hidden");
-        }
+        // Hide admin panel unless admin
+        const isAdmin = user.email === "contact@hashir.site";
+        document.getElementById("adminOption").style.display = isAdmin ? "block" : "none";
       } else {
         document.getElementById("loginCard").classList.remove("hidden");
         document.getElementById("controlCard").classList.add("hidden");
@@ -144,12 +197,10 @@
     function signup() {
       const email = document.getElementById("email").value;
       const pass = document.getElementById("password").value;
-      const key = email.replace(/\./g, ',');
 
-      db.ref("allowed_users/" + key).once('value').then(snap => {
-        if (snap.exists()) {
-          auth.createUserWithEmailAndPassword(email, pass)
-            .catch(e => alert(e.message));
+      db.ref('allowed_users/' + btoa(email)).once('value').then(snapshot => {
+        if (snapshot.exists()) {
+          auth.createUserWithEmailAndPassword(email, pass).catch(e => alert(e.message));
         } else {
           alert("⛔ This email is not allowed to register.");
         }
@@ -176,15 +227,61 @@
       });
     }
 
-    function addAllowedUser() {
-      const email = document.getElementById("newUserEmail").value;
-      if (!email) return alert("Please enter an email address");
-      const key = email.replace(/\./g, ',');
-      db.ref("allowed_users/" + key).set(true).then(() => {
-        alert("User added to allowed list");
-        document.getElementById("newUserEmail").value = "";
+    function toggleMenu() {
+      const menu = document.getElementById("dropdownMenu");
+      menu.style.display = menu.style.display === "block" ? "none" : "block";
+    }
+
+    function toggleSection(id) {
+      const section = document.getElementById(id);
+      section.classList.toggle("hidden");
+      document.getElementById("dropdownMenu").style.display = "none";
+    }
+
+    function addUser() {
+      const email = document.getElementById("newEmail").value;
+      if (!email) return alert("Enter an email.");
+      const encoded = btoa(email);
+      db.ref("allowed_users/" + encoded).set(true).then(() => {
+        alert("✅ Email allowed.");
+        document.getElementById("newEmail").value = "";
       });
     }
+
+    function rescanWifi() {
+      db.ref("wifi_scan/request").set(Date.now());
+      alert("🔄 Scan requested.");
+    }
+
+    function connectToWiFi() {
+      const ssid = selectedSSID;
+      const password = document.getElementById("wifiPassword").value;
+      if (!ssid || !password) return alert("Select a Wi-Fi and enter password.");
+      db.ref("wifi_credentials").set({ ssid, password }).then(() => {
+        alert("✅ Sent Wi-Fi credentials.");
+      });
+    }
+
+    let selectedSSID = null;
+
+    db.ref("wifi_scan/results").on('value', snap => {
+      const list = document.getElementById("wifiList");
+      list.innerHTML = "";
+      const data = snap.val();
+      if (data) {
+        Object.keys(data).forEach(key => {
+          const li = document.createElement("li");
+          li.textContent = data[key];
+          li.style.cursor = "pointer";
+          li.onclick = () => {
+            selectedSSID = data[key];
+            [...list.children].forEach(child => child.style.fontWeight = "normal");
+            li.style.fontWeight = "bold";
+          };
+          list.appendChild(li);
+        });
+      }
+    });
   </script>
 </body>
 </html>
