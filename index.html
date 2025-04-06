@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Home Automation</title>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -17,7 +17,6 @@
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      position: relative;
     }
     .card {
       background: #fff;
@@ -28,8 +27,7 @@
       max-width: 400px;
       text-align: center;
     }
-    h2 {
-      margin-bottom: 20px;
+    h2, h4 {
       color: #333;
     }
     input {
@@ -68,23 +66,25 @@
     .on { color: green; }
     .off { color: red; }
     .hidden { display: none; }
-
-    #settingsIcon {
+    .topbar {
       position: absolute;
       top: 20px;
       right: 20px;
-      font-size: 24px;
-      cursor: pointer;
+    }
+    .topbar button {
+      width: auto;
+      padding: 6px 12px;
     }
   </style>
 </head>
 <body>
-
-  <div id="settingsIcon" class="hidden" onclick="toggleSettings()">⋮</div>
+  <div class="topbar hidden" id="settingsBtnWrap">
+    <button onclick="showSettings()">Settings</button>
+  </div>
 
   <!-- Login Card -->
   <div id="loginCard" class="card">
-    <h2>🔐 Login</h2>
+    <h2>🔐 Login to Control Your Home</h2>
     <input type="email" id="email" placeholder="Email address" />
     <input type="password" id="password" placeholder="Password" />
     <button onclick="login()">Login</button>
@@ -93,32 +93,39 @@
 
   <!-- Control Panel -->
   <div id="controlCard" class="card hidden">
-    <h2>🏠 Control Panel</h2>
-    <p>Device Status: <span id="device-status" class="status">...</span></p>
+    <h2>🏠 Home Control Panel</h2>
     <p>Lamp 1: <span id="lamp1-status" class="status">...</span></p>
     <button onclick="toggleLamp('lamp1')">Toggle Lamp 1</button>
     <p>Lamp 2: <span id="lamp2-status" class="status">...</span></p>
     <button onclick="toggleLamp('lamp2')">Toggle Lamp 2</button>
+    <p>Device Status: <span id="device-status" class="status">Checking...</span></p>
     <button class="secondary" onclick="logout()" style="margin-top:20px;">Logout</button>
   </div>
 
   <!-- Settings Panel -->
   <div id="settingsCard" class="card hidden">
     <h2>⚙️ Settings</h2>
+
     <h4>WiFi Scan</h4>
     <button onclick="rescanWiFi()">Rescan</button>
-    <ul id="wifi-list"></ul>
-    <div id="wifi-connect" class="hidden">
-      <input type="text" id="selected-ssid" placeholder="SSID" readonly/>
-      <input type="password" id="wifi-password" placeholder="WiFi Password"/>
-      <button onclick="connectWiFi()">Connect</button>
+
+    <div id="wifi-section">
+      <div id="wifi-list" style="margin-top: 10px;"></div>
+
+      <div style="margin-top: 20px;">
+        <input type="text" id="selected-ssid" placeholder="Selected SSID" readonly />
+        <input type="password" id="wifi-password" placeholder="WiFi Password" />
+        <button onclick="connectWiFi()">Connect</button>
+      </div>
     </div>
-    <div id="admin-section" class="hidden">
+
+    <div id="admin-section" class="hidden" style="margin-top: 30px;">
       <h4>Admin - Add User</h4>
       <input type="email" id="new-user-email" placeholder="New user email" />
       <button onclick="addAllowedUser()">Add</button>
     </div>
-    <button class="secondary" onclick="backToControl()">Back</button>
+
+    <button class="secondary" onclick="backToControl()" style="margin-top: 20px;">Back</button>
   </div>
 
   <script>
@@ -136,27 +143,25 @@
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.database();
+    let currentUser = null;
 
+    const allowedEmailsPath = 'allowed_users';
     const adminEmail = "contact@hashir.site";
 
     auth.onAuthStateChanged(user => {
+      currentUser = user;
       if (user) {
         document.getElementById("loginCard").classList.add("hidden");
         document.getElementById("controlCard").classList.remove("hidden");
-        document.getElementById("settingsIcon").classList.remove("hidden");
-
+        document.getElementById("settingsBtnWrap").classList.remove("hidden");
         updateStatus("lamp1");
         updateStatus("lamp2");
-        updateOnlineStatus();
-
-        if (user.email === adminEmail) {
-          document.getElementById("admin-section").classList.remove("hidden");
-        }
+        trackOnlineStatus();
+        checkAdmin();
       } else {
         document.getElementById("loginCard").classList.remove("hidden");
         document.getElementById("controlCard").classList.add("hidden");
-        document.getElementById("settingsIcon").classList.add("hidden");
-        document.getElementById("settingsCard").classList.add("hidden");
+        document.getElementById("settingsBtnWrap").classList.add("hidden");
       }
     });
 
@@ -169,13 +174,13 @@
     function signup() {
       const email = document.getElementById("email").value;
       const pass = document.getElementById("password").value;
-      db.ref("allowed_users").once("value", snap => {
+      db.ref(allowedEmailsPath).once('value').then(snap => {
         const allowed = snap.val() || {};
-        if (!allowed[email.replace(/\./g, "_")]) {
+        if (!allowed[email.replace('.', ',')]) {
           alert("⛔ This email is not allowed to register.");
-          return;
+        } else {
+          auth.createUserWithEmailAndPassword(email, pass).catch(e => alert(e.message));
         }
-        auth.createUserWithEmailAndPassword(email, pass).catch(e => alert(e.message));
       });
     }
 
@@ -194,19 +199,26 @@
 
     function toggleLamp(lamp) {
       const ref = db.ref(lamp);
-      ref.once('value').then(snap => {
-        ref.set(!snap.val());
+      ref.once('value').then(snap => ref.set(!snap.val()));
+    }
+
+    function trackOnlineStatus() {
+      const statusEl = document.getElementById("device-status");
+      db.ref("status/online").on('value', snap => {
+        const isOnline = snap.val();
+        statusEl.textContent = isOnline ? "Online" : "Offline";
+        statusEl.className = `status ${isOnline ? 'on' : 'off'}`;
       });
     }
 
-    function toggleSettings() {
+    function showSettings() {
       document.getElementById("controlCard").classList.add("hidden");
       document.getElementById("settingsCard").classList.remove("hidden");
     }
 
     function backToControl() {
-      document.getElementById("settingsCard").classList.add("hidden");
       document.getElementById("controlCard").classList.remove("hidden");
+      document.getElementById("settingsCard").classList.add("hidden");
     }
 
     function rescanWiFi() {
@@ -216,40 +228,37 @@
         list.innerHTML = "";
         const data = snap.val() || [];
         data.forEach(ssid => {
-          const li = document.createElement("li");
-          li.textContent = ssid;
-          li.onclick = () => selectSSID(ssid);
-          list.appendChild(li);
+          const btn = document.createElement("button");
+          btn.textContent = ssid;
+          btn.style.width = "100%";
+          btn.style.marginBottom = "8px";
+          btn.onclick = () => document.getElementById("selected-ssid").value = ssid;
+          list.appendChild(btn);
         });
       });
-    }
-
-    function selectSSID(ssid) {
-      document.getElementById("selected-ssid").value = ssid;
-      document.getElementById("wifi-connect").classList.remove("hidden");
     }
 
     function connectWiFi() {
       const ssid = document.getElementById("selected-ssid").value;
       const pass = document.getElementById("wifi-password").value;
-      db.ref("wifi/connect").set({ ssid, password: pass });
-      alert("Attempting to connect...");
+      if (!ssid || !pass) return alert("Enter SSID and password");
+      db.ref("wifi/credentials").set({ ssid, password: pass });
     }
 
     function addAllowedUser() {
       const email = document.getElementById("new-user-email").value;
-      if (!email) return alert("Enter email");
-      db.ref("allowed_users/" + email.replace(/\./g, "_")).set(true);
-      alert("User added");
+      if (!email) return;
+      const safeEmail = email.replace('.', ',');
+      db.ref(`${allowedEmailsPath}/${safeEmail}`).set(true).then(() => {
+        alert("User added to allowed list");
+        document.getElementById("new-user-email").value = "";
+      });
     }
 
-    function updateOnlineStatus() {
-      const el = document.getElementById("device-status");
-      db.ref("device/online").on("value", snap => {
-        const val = snap.val();
-        el.textContent = val ? "Online" : "Offline";
-        el.className = `status ${val ? 'on' : 'off'}`;
-      });
+    function checkAdmin() {
+      if (currentUser && currentUser.email === adminEmail) {
+        document.getElementById("admin-section").classList.remove("hidden");
+      }
     }
   </script>
 </body>
