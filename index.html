@@ -13,12 +13,12 @@
       margin: 0;
       padding: 0;
       background: #f0f2f5;
-    }
-    .container {
+      height: 100vh;
       display: flex;
-      flex-direction: column;
+      justify-content: center;
       align-items: center;
-      padding: 30px;
+      flex-direction: column;
+      position: relative;
     }
     .card {
       background: #fff;
@@ -27,9 +27,8 @@
       box-shadow: 0 4px 20px rgba(0,0,0,0.1);
       width: 100%;
       max-width: 400px;
-      display: none;
+      margin: 10px;
     }
-    .card.active { display: block; }
     h2 {
       margin-bottom: 20px;
       color: #333;
@@ -69,8 +68,9 @@
     }
     .on { color: green; }
     .off { color: red; }
-    #settingsBtn {
-      position: fixed;
+    .hidden { display: none; }
+    #settings-btn {
+      position: absolute;
       top: 20px;
       right: 20px;
       background: none;
@@ -81,44 +81,44 @@
   </style>
 </head>
 <body>
-  <button id="settingsBtn" onclick="toggleSettings()">⚙️</button>
-  <div class="container">
 
-    <!-- Login Panel -->
-    <div id="loginCard" class="card active">
-      <h2>Login</h2>
-      <input type="email" id="email" placeholder="Email" />
-      <input type="password" id="password" placeholder="Password" />
-      <button onclick="login()">Login</button>
-      <button class="secondary" onclick="signup()">Sign Up</button>
-    </div>
+  <button id="settings-btn" onclick="toggleSettings()">\u22EE</button>
 
-    <!-- Control Panel -->
-    <div id="controlCard" class="card">
-      <h2>Control Panel</h2>
-      <p>NodeMCU Status: <span id="device-status" class="status">...</span></p>
-      <p>Lamp 1: <span id="lamp1-status" class="status">...</span></p>
-      <button onclick="toggleLamp('lamp1')">Toggle Lamp 1</button>
-      <p>Lamp 2: <span id="lamp2-status" class="status">...</span></p>
-      <button onclick="toggleLamp('lamp2')">Toggle Lamp 2</button>
-      <button class="secondary" onclick="logout()">Logout</button>
-    </div>
+  <!-- Login Card -->
+  <div id="loginCard" class="card">
+    <h2>Login to Control Your Home</h2>
+    <input type="email" id="email" placeholder="Email address" />
+    <input type="password" id="password" placeholder="Password" />
+    <button onclick="login()">Login</button>
+    <button class="secondary" onclick="signup()">Sign Up</button>
+  </div>
 
-    <!-- Settings Panel -->
-    <div id="settingsCard" class="card">
-      <h2>Wi-Fi Settings</h2>
-      <button onclick="rescanWifi()">Rescan</button>
-      <div id="wifi-list"></div>
-      <input id="wifi-password" placeholder="Enter Password" />
-      <button onclick="connectWifi()">Connect</button>
+  <!-- Control Panel -->
+  <div id="controlCard" class="card hidden">
+    <h2>Home Control Panel</h2>
+    <p>Lamp 1: <span id="lamp1-status" class="status">...</span></p>
+    <button onclick="toggleLamp('lamp1')">Toggle Lamp 1</button>
+    <p>Lamp 2: <span id="lamp2-status" class="status">...</span></p>
+    <button onclick="toggleLamp('lamp2')">Toggle Lamp 2</button>
+    <p>Device Status: <span id="device-status" class="status">Checking...</span></p>
+    <button class="secondary" onclick="logout()" style="margin-top:20px;">Logout</button>
+  </div>
 
-      <hr>
-      <h2>Add Allowed Email</h2>
-      <input id="new-email" placeholder="Enter Email to Allow" />
-      <button onclick="addAllowedEmail()">Add Email</button>
+  <!-- Settings Panel -->
+  <div id="settingsPanel" class="card hidden">
+    <h2>Settings</h2>
 
-      <button class="secondary" onclick="toggleSettings()">Back</button>
-    </div>
+    <h3>WiFi Scan</h3>
+    <button onclick="rescanWiFi()">Rescan</button>
+    <select id="wifiList"></select>
+    <input type="password" id="wifiPassword" placeholder="WiFi Password" />
+    <button onclick="connectWiFi()">Connect</button>
+
+    <h3>Add User</h3>
+    <input type="email" id="newUserEmail" placeholder="User Email" />
+    <button onclick="addAllowedUser()">Add User</button>
+
+    <button class="secondary" onclick="closeSettings()">Close</button>
   </div>
 
   <script>
@@ -135,37 +135,19 @@
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.database();
-
-    const allowedRef = db.ref("allowed_users");
-
-    const loginCard = document.getElementById("loginCard");
-    const controlCard = document.getElementById("controlCard");
-    const settingsCard = document.getElementById("settingsCard");
-
-    function show(card) {
-      loginCard.classList.remove("active");
-      controlCard.classList.remove("active");
-      settingsCard.classList.remove("active");
-      card.classList.add("active");
-    }
-
-    function toggleSettings() {
-      if (settingsCard.classList.contains("active")) {
-        show(controlCard);
-      } else {
-        show(settingsCard);
-        rescanWifi();
-      }
-    }
+    const adminEmail = "contact@hashir.site";
 
     auth.onAuthStateChanged(user => {
       if (user) {
-        show(controlCard);
-        updateLampStatus("lamp1");
-        updateLampStatus("lamp2");
-        watchDeviceStatus();
+        document.getElementById("loginCard").classList.add("hidden");
+        document.getElementById("controlCard").classList.remove("hidden");
+        updateStatus("lamp1");
+        updateStatus("lamp2");
+        monitorDeviceStatus();
       } else {
-        show(loginCard);
+        document.getElementById("loginCard").classList.remove("hidden");
+        document.getElementById("controlCard").classList.add("hidden");
+        closeSettings();
       }
     });
 
@@ -178,13 +160,12 @@
     function signup() {
       const email = document.getElementById("email").value;
       const pass = document.getElementById("password").value;
-
-      allowedRef.once("value", snap => {
-        if (!snap.hasChild(btoa(email))) {
-          alert("This email is not allowed.");
-          return;
+      db.ref("allowed_users/" + btoa(email)).once("value", snap => {
+        if (snap.exists() || email === adminEmail) {
+          auth.createUserWithEmailAndPassword(email, pass).catch(e => alert(e.message));
+        } else {
+          alert("This email is not allowed to register.");
         }
-        auth.createUserWithEmailAndPassword(email, pass).catch(e => alert(e.message));
       });
     }
 
@@ -192,9 +173,9 @@
       auth.signOut();
     }
 
-    function updateLampStatus(lamp) {
+    function updateStatus(lamp) {
       const el = document.getElementById(`${lamp}-status`);
-      db.ref(lamp).on("value", snap => {
+      db.ref(lamp).on('value', snap => {
         const val = snap.val();
         el.textContent = val ? "ON" : "OFF";
         el.className = `status ${val ? 'on' : 'off'}`;
@@ -203,47 +184,57 @@
 
     function toggleLamp(lamp) {
       const ref = db.ref(lamp);
-      ref.once("value").then(snap => ref.set(!snap.val()));
-    }
-
-    function rescanWifi() {
-      db.ref("wifi/scan_request").set(Date.now());
-      db.ref("wifi/scan_results").once("value", snap => {
-        const list = snap.val() || [];
-        const container = document.getElementById("wifi-list");
-        container.innerHTML = "";
-        list.forEach(ssid => {
-          const btn = document.createElement("button");
-          btn.textContent = ssid;
-          btn.onclick = () => {
-            document.getElementById("wifi-password").dataset.ssid = ssid;
-          };
-          container.appendChild(btn);
-        });
+      ref.once('value').then(snap => {
+        ref.set(!snap.val());
       });
     }
 
-    function connectWifi() {
-      const ssid = document.getElementById("wifi-password").dataset.ssid;
-      const pass = document.getElementById("wifi-password").value;
-      if (!ssid || !pass) return alert("Select SSID and enter password.");
-      db.ref("wifi/credentials").set({ ssid, password: pass });
-      alert("Wi-Fi credentials sent!");
+    function toggleSettings() {
+      document.getElementById("controlCard").classList.add("hidden");
+      document.getElementById("settingsPanel").classList.remove("hidden");
     }
 
-    function addAllowedEmail() {
-      const email = document.getElementById("new-email").value;
-      if (!email.includes("@")) return alert("Invalid email");
-      allowedRef.child(btoa(email)).set(true);
-      alert("Email added.");
+    function closeSettings() {
+      document.getElementById("settingsPanel").classList.add("hidden");
+      document.getElementById("controlCard").classList.remove("hidden");
     }
 
-    function watchDeviceStatus() {
-      db.ref("device/online").on("value", snap => {
-        const status = snap.val() ? "ONLINE" : "OFFLINE";
-        const el = document.getElementById("device-status");
-        el.textContent = status;
-        el.className = "status " + (status === "ONLINE" ? "on" : "off");
+    function addAllowedUser() {
+      const email = document.getElementById("newUserEmail").value;
+      if (email) {
+        db.ref("allowed_users/" + btoa(email)).set(true);
+        alert("User added to allowed list.");
+        document.getElementById("newUserEmail").value = "";
+      }
+    }
+
+    function rescanWiFi() {
+      db.ref("scan_request").set(Date.now());
+      db.ref("wifi_list").once("value", snap => {
+        const list = snap.val();
+        const wifiList = document.getElementById("wifiList");
+        wifiList.innerHTML = "";
+        for (const key in list) {
+          const option = document.createElement("option");
+          option.text = list[key];
+          wifiList.add(option);
+        }
+      });
+    }
+
+    function connectWiFi() {
+      const ssid = document.getElementById("wifiList").value;
+      const password = document.getElementById("wifiPassword").value;
+      db.ref("wifi_credentials").set({ ssid, password });
+      alert("Credentials sent to device.");
+    }
+
+    function monitorDeviceStatus() {
+      const el = document.getElementById("device-status");
+      db.ref("device_status").on("value", snap => {
+        const online = snap.val();
+        el.textContent = online ? "Online" : "Offline";
+        el.className = `status ${online ? 'on' : 'off'}`;
       });
     }
   </script>
