@@ -13,108 +13,106 @@
       margin: 0;
       padding: 0;
       background: #f0f2f5;
+    }
+    nav {
       display: flex;
-      justify-content: center;
+      background: #007bff;
+      padding: 10px;
+      color: white;
+      justify-content: space-between;
       align-items: center;
-      min-height: 100vh;
+    }
+    nav h2 {
+      margin: 0;
+    }
+    nav button {
+      background: #0056b3;
+      border: none;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .container {
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
     }
     .card {
       background: #fff;
-      padding: 30px;
+      padding: 20px;
       border-radius: 12px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-      width: 100%;
-      max-width: 400px;
-    }
-    h2 {
       margin-bottom: 20px;
-      color: #333;
+    }
+    h3 {
+      margin-top: 0;
     }
     input, select {
       width: 100%;
-      padding: 12px;
-      margin-bottom: 15px;
-      border: 1px solid #ccc;
+      padding: 10px;
+      margin: 8px 0;
       border-radius: 8px;
-      font-size: 16px;
+      border: 1px solid #ccc;
     }
     button {
-      width: 100%;
-      padding: 12px;
-      font-size: 16px;
+      padding: 10px;
+      margin-top: 10px;
       border: none;
       border-radius: 8px;
-      margin-bottom: 10px;
-      cursor: pointer;
-      background-color: #007bff;
+      background: #007bff;
       color: white;
-      transition: background-color 0.2s ease;
+      cursor: pointer;
     }
-    button:hover {
-      background-color: #0056b3;
-    }
-    .secondary {
-      background-color: #6c757d;
-    }
-    .secondary:hover {
-      background-color: #5a6268;
-    }
-    .status {
-      font-weight: bold;
-      font-size: 16px;
-    }
+    .status { font-weight: bold; }
     .on { color: green; }
     .off { color: red; }
     .hidden { display: none; }
-    #spinner {
-      margin-bottom: 15px;
-      display: flex;
-      justify-content: center;
-    }
-    .loader {
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #007bff;
-      border-radius: 50%;
-      width: 30px;
-      height: 30px;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
   </style>
 </head>
 <body>
+  <nav>
+    <h2>Home Automation</h2>
+    <button onclick="logout()">Logout</button>
+  </nav>
 
-  <!-- Login Card -->
-  <div id="loginCard" class="card">
-    <h2>🔐 Login to Control Your Home</h2>
-    <input type="email" id="email" placeholder="Email address" />
-    <input type="password" id="password" placeholder="Password" />
-    <button onclick="login()">Login</button>
-    <button class="secondary" onclick="signup()">Sign Up</button>
-  </div>
+  <div class="container">
 
-  <!-- Control Panel -->
-  <div id="controlCard" class="card hidden">
-    <h2>🏠 Home Control Panel</h2>
-    
-    <div id="spinner" class="hidden"><div class="loader"></div></div>
-    <p>Device Status: <span id="status-indicator" class="status">...</span></p>
+    <!-- Login -->
+    <div id="loginCard" class="card">
+      <h3>Login</h3>
+      <input type="email" id="email" placeholder="Email">
+      <input type="password" id="password" placeholder="Password">
+      <button onclick="login()">Login</button>
+      <button onclick="signup()">Sign Up</button>
+    </div>
 
-    <p>Lamp 1: <span id="lamp1-status" class="status">...</span></p>
-    <button onclick="toggleLamp('lamp1')">Toggle Lamp 1</button>
-    <p>Lamp 2: <span id="lamp2-status" class="status">...</span></p>
-    <button onclick="toggleLamp('lamp2')">Toggle Lamp 2</button>
+    <!-- Control Panel -->
+    <div id="controlCard" class="card hidden">
+      <h3>Control Panel</h3>
+      <p>Lamp 1: <span id="lamp1-status" class="status">...</span></p>
+      <button onclick="toggleLamp('lamp1')">Toggle Lamp 1</button>
+      <p>Lamp 2: <span id="lamp2-status" class="status">...</span></p>
+      <button onclick="toggleLamp('lamp2')">Toggle Lamp 2</button>
+      <p>NodeMCU Status: <span id="online-status" class="status">...</span></p>
+    </div>
 
-    <hr />
-    <h3>Wi-Fi Setup</h3>
-    <select id="wifiSelect"></select>
-    <input type="password" id="wifiPassword" placeholder="Wi-Fi Password" />
-    <button onclick="connectWiFi()">Connect</button>
+    <!-- Settings -->
+    <div id="settingsCard" class="card hidden">
+      <h3>Wi-Fi Setup</h3>
+      <select id="wifiList"></select>
+      <input type="password" id="wifiPass" placeholder="Wi-Fi Password">
+      <button onclick="connectWiFi()">Connect</button>
+      <button onclick="scanWiFi()">Rescan</button>
+    </div>
 
-    <button class="secondary" onclick="logout()" style="margin-top:20px;">Logout</button>
+    <!-- Admin Panel -->
+    <div id="adminCard" class="card hidden">
+      <h3>Admin: Add Allowed Email</h3>
+      <input type="email" id="newEmail" placeholder="New allowed email">
+      <button onclick="addAllowedEmail()">Add Email</button>
+    </div>
+
   </div>
 
   <script>
@@ -125,38 +123,62 @@
       projectId: "h4xcontrol",
       storageBucket: "h4xcontrol.appspot.com",
       messagingSenderId: "1030967330576",
-      appId: "1:1030967330576:web:ac3e4201a61b5bebea8795"
+      appId: "1:1030967330576:web:ac3e4201a61b5bebea8795",
+      measurementId: "G-Z20VN8LY3N"
     };
 
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.database();
 
-    auth.onAuthStateChanged(user => {
+    const adminEmails = ["contact@hashir.site", "admin@h4x.com"];
+
+    auth.onAuthStateChanged(async user => {
       if (user) {
-        document.getElementById("loginCard").classList.add("hidden");
-        document.getElementById("controlCard").classList.remove("hidden");
+        const email = user.email;
+        const allowedSnap = await db.ref("allowed_users").once("value");
+        const allowed = allowedSnap.val() || {};
+        if (!allowed[email.replace(/\./g, "_")]) {
+          alert("This email is not allowed. Logging out.");
+          logout();
+          return;
+        }
+
+        show("controlCard");
+        show("settingsCard");
+        if (adminEmails.includes(email)) show("adminCard");
+        hide("loginCard");
+
         updateStatus("lamp1");
         updateStatus("lamp2");
-        updateOnlineStatus();
-        populateWiFiList();
+        db.ref("online").on("value", snap => {
+          const el = document.getElementById("online-status");
+          el.textContent = snap.val() ? "Online" : "Offline";
+          el.className = "status " + (snap.val() ? "on" : "off");
+        });
+
+        scanWiFi();
+
       } else {
-        document.getElementById("loginCard").classList.remove("hidden");
-        document.getElementById("controlCard").classList.add("hidden");
+        hide("controlCard");
+        hide("settingsCard");
+        hide("adminCard");
+        show("loginCard");
       }
     });
 
     function login() {
-      const email = document.getElementById("email").value;
-      const pass = document.getElementById("password").value;
+      const email = emailVal();
+      const pass = passVal();
       auth.signInWithEmailAndPassword(email, pass).catch(e => alert(e.message));
     }
 
-    function signup() {
-      const email = document.getElementById("email").value;
-      const pass = document.getElementById("password").value;
-      const allowedEmails = ["contact@hashir.site", "admin@h4x.com"];
-      if (!allowedEmails.includes(email)) {
+    async function signup() {
+      const email = emailVal();
+      const pass = passVal();
+      const allowedSnap = await db.ref("allowed_users").once("value");
+      const allowed = allowedSnap.val() || {};
+      if (!allowed[email.replace(/\./g, "_")]) {
         alert("⛔ This email is not allowed to register.");
         return;
       }
@@ -167,53 +189,63 @@
       auth.signOut();
     }
 
-    function updateStatus(lamp) {
-      const el = document.getElementById(`${lamp}-status`);
-      db.ref(lamp).on('value', snap => {
-        const val = snap.val();
-        el.textContent = val ? "ON" : "OFF";
-        el.className = `status ${val ? 'on' : 'off'}`;
-      });
-    }
-
     function toggleLamp(lamp) {
       const ref = db.ref(lamp);
-      ref.once('value').then(snap => {
-        ref.set(!snap.val());
+      ref.once("value").then(snap => ref.set(!snap.val()));
+    }
+
+    function updateStatus(lamp) {
+      const el = document.getElementById(`${lamp}-status`);
+      db.ref(lamp).on("value", snap => {
+        el.textContent = snap.val() ? "ON" : "OFF";
+        el.className = "status " + (snap.val() ? "on" : "off");
       });
     }
 
-    function updateOnlineStatus() {
-      const el = document.getElementById("status-indicator");
-      db.ref("status").on("value", snap => {
-        const online = snap.val();
-        el.textContent = online === "online" ? "Online" : "Offline";
-        el.className = `status ${online === "online" ? "on" : "off"}`;
-      });
-    }
-
-    function populateWiFiList() {
-      const select = document.getElementById("wifiSelect");
-      db.ref("available_networks").once("value", snap => {
+    function scanWiFi() {
+      db.ref("wifi_scan").set(true); // NodeMCU will detect this and scan
+      setTimeout(async () => {
+        const snap = await db.ref("wifi_list").once("value");
+        const wifiList = snap.val() || [];
+        const select = document.getElementById("wifiList");
         select.innerHTML = "";
-        const list = snap.val() || [];
-        list.forEach(ssid => {
+        wifiList.forEach(name => {
           const opt = document.createElement("option");
-          opt.value = ssid;
-          opt.textContent = ssid;
+          opt.value = name;
+          opt.textContent = name;
           select.appendChild(opt);
         });
-      });
+      }, 3000); // Give NodeMCU time to scan
     }
 
     function connectWiFi() {
-      const ssid = document.getElementById("wifiSelect").value;
-      const pass = document.getElementById("wifiPassword").value;
-      if (!ssid || !pass) return alert("Please select a network and enter a password.");
-      document.getElementById("spinner").classList.remove("hidden");
-      db.ref("wifi_credentials").set({ ssid, password: pass }, () => {
-        setTimeout(() => document.getElementById("spinner").classList.add("hidden"), 2000);
-      });
+      const ssid = document.getElementById("wifiList").value;
+      const pass = document.getElementById("wifiPass").value;
+      db.ref("wifi_credentials").set({ ssid, password: pass });
+      alert("Wi-Fi credentials sent. Wait a few seconds...");
+    }
+
+    function addAllowedEmail() {
+      const email = document.getElementById("newEmail").value.trim();
+      if (!email) return alert("Enter a valid email");
+      const safeKey = email.replace(/\./g, "_");
+      db.ref("allowed_users/" + safeKey).set(true)
+        .then(() => alert("Email added!"))
+        .catch(e => alert(e.message));
+    }
+
+    function emailVal() {
+      return document.getElementById("email").value.trim();
+    }
+    function passVal() {
+      return document.getElementById("password").value.trim();
+    }
+
+    function show(id) {
+      document.getElementById(id).classList.remove("hidden");
+    }
+    function hide(id) {
+      document.getElementById(id).classList.add("hidden");
     }
   </script>
 </body>
